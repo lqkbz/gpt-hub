@@ -6,6 +6,7 @@ services:
     environment:
       - NAPCAT_UID=${NAPCAT_UID:-1000}
       - NAPCAT_GID=${NAPCAT_GID:-1000}
+      - ACCOUNT=${NAPCAT_ACCOUNT:-}   # 机器人 QQ 号；设置后重启时用缓存快速登录，免扫码
     ports:
       - "127.0.0.1:6099:6099"   # NapCat WebUI，仅本机；用 SSH 隧道访问
     volumes:
