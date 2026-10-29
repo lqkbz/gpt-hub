@@ -14,5 +14,8 @@ RUN apt-get update \
     && npm cache clean --force \
     && rm -rf /var/lib/apt/lists/*
 
+# 免费 Edge TTS（AstrBot 内置 provider 依赖，镜像未自带）
+RUN python -m pip install --no-cache-dir edge-tts
+
 # Codex 凭据单独存放，不与 NapCat 共享
 ENV CODEX_HOME=/root/.codex
