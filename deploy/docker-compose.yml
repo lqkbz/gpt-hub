@@ -1,0 +1,37 @@
+services:
+  napcat:
+    image: mlikiowa/napcat-docker:latest
+    container_name: napcat
+    restart: unless-stopped
+    environment:
+      - NAPCAT_UID=${NAPCAT_UID:-1000}
+      - NAPCAT_GID=${NAPCAT_GID:-1000}
+    ports:
+      - "127.0.0.1:6099:6099"   # NapCat WebUI，仅本机；用 SSH 隧道访问
+    volumes:
+      - ./data/napcat/config:/app/napcat/config
+      - ./data/napcat/qq:/app/.config/QQ
+      # 与 astrbot 同路径挂载，NapCat 才能读取插件生成的图片/语音/报告
+      - ./data/astrbot:/AstrBot/data
+    networks: [bot]
+
+  astrbot:
+    build:
+      context: .
+      dockerfile: astrbot.Dockerfile
+      args:
+        CODEX_VERSION: ${CODEX_VERSION:-0.165.0}
+    container_name: astrbot
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-Asia/Shanghai}
+    ports:
+      - "127.0.0.1:6185:6185"   # AstrBot WebUI，仅本机
+    volumes:
+      - ./data/astrbot:/AstrBot/data
+      - ./data/codex:/root/.codex
+      - ../plugins/astrbot_plugin_gpt_hub:/AstrBot/data/plugins/astrbot_plugin_gpt_hub
+    networks: [bot]
+
+networks:
+  bot:
