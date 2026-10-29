@@ -22,6 +22,7 @@ _ADMIN = [
     "/mode model <模型|default>  设群聊天模型",
     "/mode effort <low|medium|high|xhigh|default>  设群推理强度",
     "/mode chat on|off  群聊天开关",
+    "/voice on|off -g <群号>  指定群之后的回复全部转语音",
     "",
     "【角色扮演】",
     "/role  当前角色与列表",

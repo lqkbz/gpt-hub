@@ -91,3 +91,13 @@ def handle_mode(args: list[str], *, current_group: str | None, policy: Policy, s
         return err
     store.save_policy(p)
     return "已更新：\n" + render_policy(p, policy)
+
+
+def parse_voice_args(args: list[str]) -> tuple[str, str | None] | None:
+    """/voice 参数 → (on|off|status, 群号或 None)；非法返回 None。"""
+    args, group, ok = _pop_group_flag(args)
+    if not ok or len(args) > 1:
+        return None
+    if not args:
+        return "status", group
+    return (args[0], group) if args[0] in ("on", "off") else None

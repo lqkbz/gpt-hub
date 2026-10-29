@@ -14,7 +14,7 @@ from astrbot.core.star.command_management import toggle_command
 from astrbot.core.star.filter.command import CommandFilter
 from astrbot.core.star.star_handler import star_handlers_registry
 
-from .core.commands import handle_mode
+from .core.commands import handle_mode, parse_voice_args
 from .core.config import ConfigError, parse_config
 from .core.draw import BackendError, DrawService, build_backends
 from .core.helptext import build_help
@@ -312,15 +312,28 @@ class GptHub(Star):
         if reason := self._gate(event, "voice"):
             yield event.plain_result(reason)
             return
-        args = _args(event)
-        if len(args) != 1 or args[0] not in ("on", "off"):
-            yield event.plain_result("用法：/voice on|off")
+        parsed = parse_voice_args(_args(event))
+        if parsed is None:
+            yield event.plain_result("用法：/voice on|off（owner 可加 -g <群号> 设置指定群）")
             return
-        on = args[0] == "on"
-        self.store.set_voice(event.unified_msg_origin, on)
-        if on:
-            self.policy.consume_feature(_msg_ctx(event), "voice")
-        yield event.plain_result("本会话 AI 回复将转为语音" if on else "已关闭语音回复")
+        state, group = parsed
+        ctx = _msg_ctx(event)
+        if group is None:
+            umo, where = event.unified_msg_origin, "本会话"
+        elif self.policy.is_owner(ctx.sender_id):
+            umo, where = f"{event.get_platform_id()}:GroupMessage:{group}", f"群 {group}"
+        else:
+            yield event.plain_result("只有 owner 可以设置其他群")
+            return
+        if state == "status":
+            on = self.store.is_voice(umo)
+            yield event.plain_result(f"{where}语音回复：{'开' if on else '关'}")
+            return
+        on = state == "on"
+        self.store.set_voice(umo, on)
+        if on and group is None:
+            self.policy.consume_feature(ctx, "voice")
+        yield event.plain_result(f"{where}之后的 AI 回复将转为语音" if on else f"已关闭{where}的语音回复")
 
     @filter.on_decorating_result()
     async def voice_reply(self, event: AstrMessageEvent) -> None:

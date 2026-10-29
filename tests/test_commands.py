@@ -106,3 +106,23 @@ def test_preserves_other_fields(env):
     run("effort medium")
     p = store.get_policy("100")
     assert (p.model, p.effort, p.features) == ("m", "medium", {"draw": 1})
+
+
+@pytest.mark.parametrize(
+    "args,expected",
+    [
+        (["on"], ("on", None)),
+        (["off"], ("off", None)),
+        ([], ("status", None)),
+        (["on", "-g", "123"], ("on", "123")),
+        (["-g", "123", "off"], ("off", "123")),
+        (["-g", "123"], ("status", "123")),
+        (["maybe"], None),
+        (["on", "-g"], None),
+        (["on", "off"], None),
+    ],
+)
+def test_parse_voice_args(args, expected):
+    from core.commands import parse_voice_args
+
+    assert parse_voice_args(args) == expected
