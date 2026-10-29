@@ -15,9 +15,11 @@ from .procs import Runner, classify_codex_error, run_process
 
 IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".webp")
 
+# 图片由 codex 自动存到 $CODEX_HOME/generated_images，插件从那里取；
+# 不让它执行命令（容器内沙箱不可用，复制文件会失败且浪费额度）。
 CODEX_DRAW_PROMPT = (
-    "使用你的图像生成工具，根据下面的描述生成一张图片，"
-    "并把最终图片文件保存到当前工作目录。不要做其他事情。\n\n描述：{prompt}"
+    "只调用你的图像生成工具，根据下面的描述生成一张图片。"
+    "不要执行任何 shell 命令，不要读写文件，生成后直接结束。\n\n描述：{prompt}"
 )
 
 
