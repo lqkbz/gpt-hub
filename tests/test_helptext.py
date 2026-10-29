@@ -44,7 +44,8 @@ def test_owner_in_group_hides_admin(policy):
     p, _ = policy
     out = build_help(p, MsgCtx("8", "100"), role_name=None)
     assert "/draw" in out and "/research" in out and "不限次数" in out
-    assert "/mode" not in out and "私聊我发送 /help" in out
+    assert "/mode" not in out and "私聊" not in out
+    assert out.rstrip().endswith("/help  显示本说明")
 
 
 def test_owner_private_full(policy):

@@ -84,10 +84,6 @@ def build_help(policy: Policy, ctx: MsgCtx, role_name: str | None) -> str:
     lines.append("")
 
     lines += _COMMON
-    if owner:
-        lines.append("")
-        if ctx.group_id is None:
-            lines += _ADMIN
-        else:
-            lines.append("管理命令请私聊我发送 /help 查看")
+    if owner and ctx.group_id is None:
+        lines += ["", *_ADMIN]
     return "\n".join(lines)
