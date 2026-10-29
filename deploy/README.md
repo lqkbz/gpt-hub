@@ -93,6 +93,20 @@ docker exec -it astrbot codex login status
 | `/say 你好`、`/voice on` 后提问 | 收到语音 |
 | 研究进行中重启 astrbot | 重启后收到“因重启中断”通知 |
 
+## 掉线排查与保持在线
+
+- 现象：NapCat 日志出现 `[KickedOffLine] ... 登录已失效`，之后反复 `Login Error ... ErrCode: 3` 并打印二维码。这是 QQ 服务器把登录态作废了，不是容器挂了。
+- 常见原因：海外机房 IP、新设备登录（容器重建导致主机名和 MAC 变化）、小号太新或不活跃、同一个号在其他电脑端登录、短时间发消息太多。
+- 已做的措施：
+  - `NAPCAT_HOSTNAME` 和 `NAPCAT_MAC` 固定设备指纹，首次部署后不要再改；
+  - `NAPCAT_ACCOUNT` 用于快速登录；
+  - 可选 `NAPCAT_QUICK_PASSWORD_MD5`，快速登录失效时自动用密码重登。
+- 建议：
+  - 小号绑定手机，并在手机 QQ 上保持登录；
+  - 不要在其他电脑或网页上登录这个号；
+  - 刚上线的几天少发消息、少进群。
+- 重新扫码：SSH 隧道打开 NapCat WebUI，或者执行 `docker logs napcat | grep 二维码解码URL`，把链接转成二维码后扫码。
+
 ## 更新
 
 ```bash

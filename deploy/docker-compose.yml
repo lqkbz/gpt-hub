@@ -3,10 +3,15 @@ services:
     image: mlikiowa/napcat-docker:latest
     container_name: napcat
     restart: unless-stopped
+    # 固定设备指纹：主机名和 MAC 随容器重建而变时，QQ 视为新设备登录，易触发风控、登录态失效
+    hostname: ${NAPCAT_HOSTNAME:-qqbot-napcat}
     environment:
       - NAPCAT_UID=${NAPCAT_UID:-1000}
       - NAPCAT_GID=${NAPCAT_GID:-1000}
       - ACCOUNT=${NAPCAT_ACCOUNT:-}   # 机器人 QQ 号；设置后重启时用缓存快速登录，免扫码
+      # 快速登录失效时用密码兜底自动重登（任选其一，推荐 MD5）；可能偶尔需要滑块/设备验证
+      - NAPCAT_QUICK_PASSWORD=${NAPCAT_QUICK_PASSWORD:-}
+      - NAPCAT_QUICK_PASSWORD_MD5=${NAPCAT_QUICK_PASSWORD_MD5:-}
     ports:
       - "127.0.0.1:6099:6099"   # NapCat WebUI，仅本机；用 SSH 隧道访问
     volumes:
@@ -14,7 +19,9 @@ services:
       - ./data/napcat/qq:/app/.config/QQ
       # 与 astrbot 同路径挂载，NapCat 才能读取插件生成的图片/语音/报告
       - ./data/astrbot:/AstrBot/data
-    networks: [bot]
+    networks:
+      bot:
+        mac_address: ${NAPCAT_MAC:-02:42:ac:11:00:02}
 
   astrbot:
     build:
