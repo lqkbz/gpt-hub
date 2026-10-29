@@ -29,6 +29,18 @@ CREATE TABLE IF NOT EXISTS tts_choice (
     scope TEXT PRIMARY KEY,
     preset TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS role (
+    name TEXT PRIMARY KEY,
+    prompt TEXT NOT NULL,
+    greeting TEXT NOT NULL DEFAULT '',
+    examples TEXT NOT NULL DEFAULT '',
+    secret TEXT NOT NULL DEFAULT '',
+    tts_preset TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS role_choice (
+    scope TEXT PRIMARY KEY,
+    role TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS research_job (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     umo TEXT NOT NULL,
@@ -52,6 +64,19 @@ class GroupPolicy:
     effort: str | None = None
     features: dict[str, int] = field(default_factory=dict)
     chat_enabled: bool = True
+
+
+@dataclass
+class Role:
+    name: str
+    prompt: str
+    greeting: str = ""
+    examples: str = ""
+    secret: str = ""
+    tts_preset: str = ""
+
+
+_ROLE_COLS = "name, prompt, greeting, examples, secret, tts_preset"
 
 
 @dataclass
@@ -152,6 +177,37 @@ class Store:
             self._write("DELETE FROM tts_choice WHERE scope = ?", (scope,))
         else:
             self._write("INSERT OR REPLACE INTO tts_choice (scope, preset) VALUES (?, ?)", (scope, preset))
+
+    # 角色（scope：global、group:<群号>、private:<QQ号>；role 为空串表示显式不用角色）
+
+    def save_role(self, r: Role) -> None:
+        self._write(
+            f"INSERT OR REPLACE INTO role ({_ROLE_COLS}) VALUES (?, ?, ?, ?, ?, ?)",
+            (r.name, r.prompt, r.greeting, r.examples, r.secret, r.tts_preset),
+        )
+
+    def get_role(self, name: str) -> Role | None:
+        rows = self._query(f"SELECT {_ROLE_COLS} FROM role WHERE name = ?", (name,))
+        return Role(*rows[0]) if rows else None
+
+    def list_roles(self) -> list[Role]:
+        return [Role(*r) for r in self._query(f"SELECT {_ROLE_COLS} FROM role ORDER BY name")]
+
+    def delete_role(self, name: str) -> bool:
+        return self._write("DELETE FROM role WHERE name = ?", (name,)).rowcount > 0
+
+    def get_role_choice(self, scope: str) -> str | None:
+        rows = self._query("SELECT role FROM role_choice WHERE scope = ?", (scope,))
+        return rows[0][0] if rows else None
+
+    def set_role_choice(self, scope: str, role: str | None) -> None:
+        if role is None:
+            self._write("DELETE FROM role_choice WHERE scope = ?", (scope,))
+        else:
+            self._write("INSERT OR REPLACE INTO role_choice (scope, role) VALUES (?, ?)", (scope, role))
+
+    def clear_role_choices_for(self, role: str) -> None:
+        self._write("DELETE FROM role_choice WHERE role = ?", (role,))
 
     # 研究任务
 

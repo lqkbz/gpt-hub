@@ -17,6 +17,7 @@ from .core.draw import BackendError, DrawService, build_backends
 from .core.http import AiohttpClient
 from .core.policy import MsgCtx, Policy
 from .core.research import ResearchService
+from .core.roles import RoleService, build_role_block
 from .core.store import Store
 from .core.tts import TtsError, TtsService
 
@@ -32,6 +33,12 @@ def _msg_ctx(event: AstrMessageEvent) -> MsgCtx:
 def _args(event: AstrMessageEvent) -> list[str]:
     """去掉命令词后的参数。"""
     return event.message_str.strip().split()[1:]
+
+
+def _raw_args(event: AstrMessageEvent) -> str:
+    """去掉命令词后的原始文本（保留换行）。"""
+    parts = event.message_str.strip().split(maxsplit=1)
+    return parts[1] if len(parts) > 1 else ""
 
 
 def _short(e: Exception) -> str:
@@ -59,6 +66,7 @@ class GptHub(Star):
         self.draw = DrawService(build_backends(self.cfg, http, codex_home), data_dir / "draw")
         self.tts = TtsService(self.cfg, self.store, http, self._astrbot_tts, data_dir / "tts")
         self.research = ResearchService(self.cfg, self.store, data_dir / "research", self._notify)
+        self.roles = RoleService(self.store, self._generate)
 
     async def initialize(self) -> None:
         if not self.config_error:
@@ -98,6 +106,53 @@ class GptHub(Star):
         model = event.get_extra(MODEL_EXTRA)
         if model:
             req.model = model
+        if self.config_error:
+            return
+        ctx = _msg_ctx(event)
+        role = self.roles.resolve(ctx.group_id, ctx.sender_id)
+        if role is not None:
+            # 放在最前面并声明最高优先级，覆盖 AstrBot 人格
+            req.system_prompt = build_role_block(role) + "\n\n" + (req.system_prompt or "")
+
+    # 角色扮演
+
+    async def _generate(self, system: str, prompt: str) -> str:
+        """用 owner 档位的订阅模型生成文本（角色卡扩写等）。"""
+        pid = self.cfg.effort_providers.get(self.cfg.owner_effort)
+        prov = self.context.get_provider_by_id(pid) if pid else None
+        if prov is None:
+            prov = self.context.get_using_provider()
+        if prov is None:
+            raise RuntimeError("没有可用的聊天模型")
+        kwargs = {"model": self.cfg.owner_model} if self.cfg.owner_model else {}
+        resp = await prov.text_chat(prompt=prompt, system_prompt=system, **kwargs)
+        return resp.completion_text or ""
+
+    @filter.command("role")
+    async def role_cmd(self, event: AstrMessageEvent):
+        if self.config_error:
+            yield event.plain_result(f"配置错误：{self.config_error}")
+            return
+        ctx = _msg_ctx(event)
+        if not self.policy.is_owner(ctx.sender_id):
+            return
+        if _raw_args(event).split(maxsplit=1)[:1] in (["gen"], ["secret"]):
+            await event.send(MessageChain().message("生成中…"))
+        act = await self.roles.handle(_raw_args(event), current_group=ctx.group_id, sender_id=ctx.sender_id)
+        if act.switch_scope:
+            pid = event.get_platform_id()
+            kind, target = act.switch_scope.split(":", 1)
+            umo = f"{pid}:{'GroupMessage' if kind == 'group' else 'FriendMessage'}:{target}"
+            try:
+                history = [{"role": "assistant", "content": act.greeting}] if act.greeting else None
+                await self.context.conversation_manager.new_conversation(umo, pid, content=history)
+                if act.greeting:
+                    await self.context.send_message(umo, MessageChain().message(act.greeting))
+            except Exception as e:  # noqa: BLE001
+                logger.exception("gpt_hub 切换角色开新对话失败 umo=%s", umo)
+                yield event.plain_result(f"{act.text}\n（开新对话失败：{_short(e)}）")
+                return
+        yield event.plain_result(act.text)
 
     # 管理
 
@@ -190,7 +245,10 @@ class GptHub(Star):
         return await prov.get_audio(text)
 
     async def _tts(self, event: AstrMessageEvent, text: str) -> str:
-        return await self.tts.synth(text, _msg_ctx(event).group_id, event.unified_msg_origin)
+        ctx = _msg_ctx(event)
+        role = self.roles.resolve(ctx.group_id, ctx.sender_id)
+        role_preset = role.tts_preset if role and role.tts_preset else None
+        return await self.tts.synth(text, ctx.group_id, event.unified_msg_origin, role_preset)
 
     @filter.command("tts")
     async def tts_cmd(self, event: AstrMessageEvent):

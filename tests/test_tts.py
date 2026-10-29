@@ -155,3 +155,20 @@ def test_command_errors(make):
     assert "不存在的预设" in svc.handle_command(["global", "nope"], "1")
     assert svc.handle_command(["fly"], "1") == TTS_USAGE
     assert svc.handle_command(["use"], "1") == TTS_USAGE
+
+
+def test_role_preset_priority(make):
+    svc, store = make(tts_default_preset="edge")
+    assert (svc.resolve("1", role_preset="idx")[0].name, svc.resolve("1", role_preset="idx")[1]) == ("idx", "角色绑定")
+    store.set_tts_choice("global", "edge")
+    assert svc.resolve("1", role_preset="idx")[0].name == "idx"  # 角色优先于全局
+    store.set_tts_choice("group:1", "edge")
+    assert svc.resolve("1", role_preset="idx")[1] == "群设置"  # 群设置优先于角色
+    assert svc.resolve("2", role_preset="missing")[0].name == "edge"
+
+
+async def test_synth_with_role_preset(make):
+    ab = FakeAstrbot()
+    svc, _ = make(astrbot=ab)
+    store_path = await svc.synth("hi", "1", "umo", role_preset="edge")
+    assert store_path == "/edge_tts.wav"

@@ -49,10 +49,13 @@ class TtsService:
         self.timeout = timeout
         self._presets = {p.name: p for p in cfg.tts_presets}
 
-    def resolve(self, group_id: str | None) -> tuple[TtsPreset | None, str]:
+    def resolve(
+        self, group_id: str | None, role_preset: str | None = None
+    ) -> tuple[TtsPreset | None, str]:
         candidates = []
         if group_id is not None:
             candidates.append((self.store.get_tts_choice(f"group:{group_id}"), "群设置"))
+        candidates.append((role_preset, "角色绑定"))
         candidates.append((self.store.get_tts_choice("global"), "全局设置"))
         candidates.append((self.cfg.tts_default_preset, "配置默认"))
         for name, source in candidates:
@@ -60,8 +63,10 @@ class TtsService:
                 return self._presets[name], source
         return None, "AstrBot 默认"
 
-    async def synth(self, text: str, group_id: str | None, umo: str) -> str:
-        preset, _ = self.resolve(group_id)
+    async def synth(
+        self, text: str, group_id: str | None, umo: str, role_preset: str | None = None
+    ) -> str:
+        preset, _ = self.resolve(group_id, role_preset)
         errors = []
         if preset is not None:
             try:

@@ -61,6 +61,14 @@ docker exec -it astrbot codex login status
 
 改完配置后重载插件。
 
+### 角色扮演（owner 私聊执行，`-g <群号>` 指定群）
+
+- `/role gen <名称> <描述>`：AI 扩写角色卡；`/role set <名称> <人设>`：手写人设
+- `/role greet|secret|voice <名称> <内容>`：设置开场白、隐藏设定（`secret … gen` 让 AI 重新生成）、绑定语音
+- `/role use <名称|none|default> [-g 群号]`：切换角色，会开新对话并发开场白；`/role global <名称|none>`：设全局默认
+- `/role`、`/role show <名称>`、`/role del <名称>`
+- 建议在 AstrBot 配置中打开 `provider_settings.identifier`，让模型知道每条消息是谁发的
+
 ## 6. 第 0 步实测清单（首次部署必须做）
 
 - [ ] 聊天 provider：`/mode effort high` 后提问，在 AstrBot 日志确认请求用的是 `codex_high`、`reasoning.effort=high`。

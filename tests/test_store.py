@@ -78,3 +78,31 @@ def test_tts_choice(tmp_path):
     assert (s.get_tts_choice("global"), s.get_tts_choice("group:1")) == ("idx", "edge")
     s.set_tts_choice("group:1", None)
     assert s.get_tts_choice("group:1") is None
+
+
+def test_roles_crud(tmp_path):
+    from core.store import Role
+
+    s = make(tmp_path)
+    assert s.get_role("a") is None and s.list_roles() == []
+    s.save_role(Role("b", "人设B"))
+    s.save_role(Role("a", "人设A", greeting="嗨", examples="例", secret="秘", tts_preset="晓晓"))
+    assert s.get_role("a") == Role("a", "人设A", "嗨", "例", "秘", "晓晓")
+    assert [r.name for r in s.list_roles()] == ["a", "b"]
+    s.save_role(Role("a", "新人设"))
+    assert s.get_role("a").prompt == "新人设"
+    assert s.delete_role("a") is True and s.delete_role("a") is False
+
+
+def test_role_choice(tmp_path):
+    s = make(tmp_path)
+    assert s.get_role_choice("group:1") is None
+    s.set_role_choice("group:1", "a")
+    s.set_role_choice("global", "a")
+    s.set_role_choice("group:2", "")
+    assert (s.get_role_choice("group:1"), s.get_role_choice("group:2")) == ("a", "")
+    s.clear_role_choices_for("a")
+    assert s.get_role_choice("group:1") is None and s.get_role_choice("global") is None
+    assert s.get_role_choice("group:2") == ""
+    s.set_role_choice("group:2", None)
+    assert s.get_role_choice("group:2") is None
