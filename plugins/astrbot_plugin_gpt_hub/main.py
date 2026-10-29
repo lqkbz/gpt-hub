@@ -179,7 +179,12 @@ class GptHub(Star):
         if provider_id:
             prov = self.context.get_provider_by_id(provider_id)
         else:
+            # AstrBot 全局 TTS 关闭时 get_using_tts_provider 返回 None（开启会把所有回复转语音），
+            # 所以退而用第一个已启用的 TTS provider
             prov = self.context.get_using_tts_provider(umo)
+            if prov is None:
+                all_tts = self.context.get_all_tts_providers()
+                prov = all_tts[0] if all_tts else None
         if prov is None or not hasattr(prov, "get_audio"):
             return None
         return await prov.get_audio(text)
