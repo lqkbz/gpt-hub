@@ -1,0 +1,6 @@
+name: astrbot_plugin_gpt_hub
+display_name: GPT Hub
+desc: ChatGPT 订阅 QQ 机器人：按会话/按人的模式与权限，群模型与推理强度，生图、深度研究、语音
+version: 0.1.0
+author: lqkbz
+repo: ""
