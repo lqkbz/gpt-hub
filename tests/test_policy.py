@@ -118,3 +118,14 @@ def test_owner_consume_is_noop(env):
     p, store, _ = env()
     p.consume_feature(MsgCtx("8", "100"), "draw")
     assert store.get_counter("feat:draw:100:8", p.today()) == 0
+
+
+def test_feature_remaining(env):
+    p, store, _ = env()
+    ctx = MsgCtx("1", "100")
+    assert p.feature_remaining(ctx, "draw") is None
+    store.save_policy(GroupPolicy("100", features={"draw": 2}))
+    assert p.feature_remaining(ctx, "draw") == 2
+    p.consume_feature(ctx, "draw")
+    assert p.feature_remaining(ctx, "draw") == 1
+    assert p.feature_remaining(MsgCtx("8", "100"), "draw") is None

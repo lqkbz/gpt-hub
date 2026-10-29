@@ -96,6 +96,16 @@ class Policy:
             return FeatureCheck(False, f"今日 {feature} 次数已用完（{quota}）")
         return FeatureCheck(True)
 
+    def feature_remaining(self, ctx: MsgCtx, feature: str) -> int | None:
+        """群成员今日剩余次数；owner、私聊或未开放返回 None。"""
+        if self.is_owner(ctx.sender_id) or ctx.group_id is None:
+            return None
+        quota = self.store.get_policy(ctx.group_id).features.get(feature)
+        if quota is None:
+            return None
+        used = self.store.get_counter(self._feature_key(ctx, feature), self.today())
+        return max(quota - used, 0)
+
     def consume_feature(self, ctx: MsgCtx, feature: str) -> None:
         if self.is_owner(ctx.sender_id):
             return

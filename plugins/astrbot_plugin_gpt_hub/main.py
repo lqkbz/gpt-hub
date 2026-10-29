@@ -10,10 +10,14 @@ from astrbot.api import AstrBotConfig, logger
 from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star, StarTools, register
+from astrbot.core.star.command_management import toggle_command
+from astrbot.core.star.filter.command import CommandFilter
+from astrbot.core.star.star_handler import star_handlers_registry
 
 from .core.commands import handle_mode
 from .core.config import ConfigError, parse_config
 from .core.draw import BackendError, DrawService, build_backends
+from .core.helptext import build_help
 from .core.http import AiohttpClient
 from .core.policy import MsgCtx, Policy
 from .core.research import ResearchService
@@ -76,6 +80,28 @@ class GptHub(Star):
         if not self.config_error:
             await self.research.stop()
             self.store.close()
+
+    @filter.on_astrbot_loaded()
+    async def disable_builtin_help(self) -> None:
+        """禁用其他插件（AstrBot 内置）的 /help，由本插件提供中文说明；可在 WebUI 指令管理里恢复。"""
+        for h in list(star_handlers_registry):
+            if h.handler_module_path == __name__ or not h.enabled:
+                continue
+            if any(isinstance(f, CommandFilter) and f.command_name == "help" for f in h.event_filters):
+                try:
+                    await toggle_command(h.handler_full_name, False)
+                    logger.info("gpt_hub 已禁用 %s 的 /help", h.handler_full_name)
+                except Exception:  # noqa: BLE001
+                    logger.exception("gpt_hub 禁用 /help 失败：%s", h.handler_full_name)
+
+    @filter.command("help")
+    async def help_cmd(self, event: AstrMessageEvent):
+        if self.config_error:
+            yield event.plain_result(f"配置错误：{self.config_error}")
+            return
+        ctx = _msg_ctx(event)
+        role = self.roles.resolve(ctx.group_id, ctx.sender_id)
+        yield event.plain_result(build_help(self.policy, ctx, role.name if role else None))
 
     async def _notify(self, umo: str, text: str, file_path: str | None) -> None:
         chain = MessageChain().message(text)
