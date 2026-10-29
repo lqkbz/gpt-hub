@@ -13,10 +13,12 @@ from astrbot.api.star import Context, Star, StarTools, register
 
 from .core.commands import handle_mode
 from .core.config import ConfigError, parse_config
-from .core.draw import AiohttpClient, BackendError, DrawService, build_backends
+from .core.draw import BackendError, DrawService, build_backends
+from .core.http import AiohttpClient
 from .core.policy import MsgCtx, Policy
 from .core.research import ResearchService
 from .core.store import Store
+from .core.tts import TtsError, TtsService
 
 PLUGIN_NAME = "astrbot_plugin_gpt_hub"
 MODEL_EXTRA = "gpt_hub_model"
@@ -53,9 +55,9 @@ class GptHub(Star):
         )
         self.store = Store(data_dir / "gpt_hub.db")
         self.policy = Policy(self.cfg, self.store)
-        self.draw = DrawService(
-            build_backends(self.cfg, AiohttpClient(), codex_home), data_dir / "draw"
-        )
+        http = AiohttpClient()
+        self.draw = DrawService(build_backends(self.cfg, http, codex_home), data_dir / "draw")
+        self.tts = TtsService(self.cfg, self.store, http, self._astrbot_tts, data_dir / "tts")
         self.research = ResearchService(self.cfg, self.store, data_dir / "research", self._notify)
 
     async def initialize(self) -> None:
@@ -172,11 +174,28 @@ class GptHub(Star):
         self.policy.consume_feature(ctx, "research")
         yield event.plain_result(f"已提交研究 #{job.id}，完成后会发到这里")
 
-    async def _tts(self, event: AstrMessageEvent, text: str) -> str | None:
-        tts = self.context.get_using_tts_provider(event.unified_msg_origin)
-        if tts is None:
+    async def _astrbot_tts(self, provider_id: str | None, text: str, umo: str) -> str | None:
+        """调用 AstrBot 的 TTS provider；provider_id 为空用会话当前 TTS。"""
+        if provider_id:
+            prov = self.context.get_provider_by_id(provider_id)
+        else:
+            prov = self.context.get_using_tts_provider(umo)
+        if prov is None or not hasattr(prov, "get_audio"):
             return None
-        return await tts.get_audio(text)
+        return await prov.get_audio(text)
+
+    async def _tts(self, event: AstrMessageEvent, text: str) -> str:
+        return await self.tts.synth(text, _msg_ctx(event).group_id, event.unified_msg_origin)
+
+    @filter.command("tts")
+    async def tts_cmd(self, event: AstrMessageEvent):
+        if self.config_error:
+            yield event.plain_result(f"配置错误：{self.config_error}")
+            return
+        ctx = _msg_ctx(event)
+        if not self.policy.is_owner(ctx.sender_id):
+            return
+        yield event.plain_result(self.tts.handle_command(_args(event), ctx.group_id))
 
     @filter.command("say")
     async def say_cmd(self, event: AstrMessageEvent):
@@ -192,12 +211,12 @@ class GptHub(Star):
             return
         try:
             path = await self._tts(event, text)
+        except TtsError as e:
+            yield event.plain_result(str(e)[:300])
+            return
         except Exception as e:  # noqa: BLE001
             logger.exception("gpt_hub /say 异常")
             yield event.plain_result(f"语音合成失败：{_short(e)}")
-            return
-        if path is None:
-            yield event.plain_result("未配置 TTS，请 owner 在 AstrBot WebUI 中启用 TTS provider")
             return
         self.policy.consume_feature(_msg_ctx(event), "voice")
         yield event.chain_result([Comp.Record(file=path)])
@@ -237,5 +256,4 @@ class GptHub(Star):
         except Exception:  # noqa: BLE001 - 失败则保留文本回复
             logger.exception("gpt_hub 语音回复合成失败")
             return
-        if path:
-            result.chain = [Comp.Record(file=path)]
+        result.chain = [Comp.Record(file=path)]

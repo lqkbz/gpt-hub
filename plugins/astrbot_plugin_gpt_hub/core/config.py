@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 FEATURES = ("draw", "research", "voice")
 DRAW_BACKEND_TYPES = ("openai_images", "codex_cli")
+TTS_PRESET_TYPES = ("openai_speech", "astrbot")
 
 
 class ConfigError(ValueError):
@@ -24,6 +25,20 @@ class DrawBackendConf:
     api_key: str = ""
     model: str = ""
     size: str = "1024x1024"
+
+
+@dataclass(frozen=True)
+class TtsPreset:
+    name: str
+    type: str
+    base_url: str = ""
+    api_key: str = ""
+    model: str = ""
+    voice: str = ""
+    response_format: str = "mp3"
+    speed: float = 1.0
+    extra: dict[str, Any] = field(default_factory=dict)
+    provider_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -50,6 +65,8 @@ class HubConfig:
     research_concurrency: int = 1
     research_summary_chars: int = 600
     tts_max_chars: int = 300
+    tts_presets: tuple[TtsPreset, ...] = ()
+    tts_default_preset: str = ""
 
 
 _POSITIVE_INTS = (
@@ -72,6 +89,7 @@ _STRINGS = (
     "codex_home",
     "research_model",
     "research_effort",
+    "tts_default_preset",
 )
 
 
@@ -105,6 +123,36 @@ def _parse_draw_backends(value: Any) -> tuple[DrawBackendConf, ...]:
     return tuple(out)
 
 
+def _parse_tts_presets(value: Any) -> tuple[TtsPreset, ...]:
+    out: list[TtsPreset] = []
+    for item in _load_json("tts_presets", value, list):
+        if not isinstance(item, dict) or not item.get("name") or not item.get("type"):
+            raise ConfigError("tts_presets 每项需要 name 和 type")
+        if item["type"] not in TTS_PRESET_TYPES:
+            raise ConfigError(f"未知语音预设类型：{item['type']}")
+        if item["type"] == "astrbot" and not item.get("provider_id"):
+            raise ConfigError(f"语音预设 {item['name']} 缺少 provider_id")
+        if item["type"] == "openai_speech" and not (item.get("base_url") and item.get("model")):
+            raise ConfigError(f"语音预设 {item['name']} 缺少 base_url 或 model")
+        kw: dict[str, Any] = {
+            k: str(v) for k, v in item.items()
+            if k in TtsPreset.__dataclass_fields__ and k not in ("speed", "extra")
+        }  # fmt: skip
+        try:
+            kw["speed"] = float(item.get("speed", 1.0))
+        except (TypeError, ValueError) as e:
+            raise ConfigError(f"语音预设 {item['name']} 的 speed 应为数字") from e
+        extra = item.get("extra", {})
+        if not isinstance(extra, dict):
+            raise ConfigError(f"语音预设 {item['name']} 的 extra 应为对象")
+        kw["extra"] = extra
+        out.append(TtsPreset(**kw))
+    names = [p.name for p in out]
+    if len(set(names)) != len(names):
+        raise ConfigError("tts_presets 名称重复")
+    return tuple(out)
+
+
 def parse_config(raw: Mapping[str, Any]) -> HubConfig:
     kw: dict[str, Any] = {}
     if "owner_ids" in raw:
@@ -132,7 +180,12 @@ def parse_config(raw: Mapping[str, Any]) -> HubConfig:
         v = raw["research_extra_args"]
         kw["research_extra_args"] = tuple(shlex.split(v) if isinstance(v, str) else map(str, v))
 
+    if "tts_presets" in raw:
+        kw["tts_presets"] = _parse_tts_presets(raw["tts_presets"])
+
     cfg = HubConfig(**kw)
+    if cfg.tts_default_preset and cfg.tts_default_preset not in {p.name for p in cfg.tts_presets}:
+        raise ConfigError(f"tts_default_preset 不存在：{cfg.tts_default_preset}")
     try:
         ZoneInfo(cfg.timezone)
     except (ZoneInfoNotFoundError, ValueError) as e:

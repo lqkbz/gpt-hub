@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Protocol
 
 from .config import DrawBackendConf, HubConfig
+from .http import AiohttpClient  # noqa: F401 - 兼容旧导入
 from .procs import Runner, classify_codex_error, run_process
 
 IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".webp")
@@ -42,17 +43,6 @@ class ImageBackend(Protocol):
 
 class HttpClient(Protocol):
     async def post_json(self, url: str, headers: dict, payload: dict, timeout: float) -> dict: ...
-
-
-class AiohttpClient:
-    async def post_json(self, url: str, headers: dict, payload: dict, timeout: float) -> dict:
-        import aiohttp
-
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as s:
-            async with s.post(url, headers=headers, json=payload) as resp:
-                if resp.status // 100 != 2:
-                    raise BackendError(f"HTTP {resp.status}: {(await resp.text())[:200]}")
-                return await resp.json(content_type=None)
 
 
 class OpenAIImagesBackend:

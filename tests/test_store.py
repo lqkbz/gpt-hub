@@ -68,3 +68,13 @@ def test_persistence(tmp_path):
     s.save_policy(GroupPolicy("1", features={"voice": 2}))
     s.close()
     assert make(tmp_path).get_policy("1").features == {"voice": 2}
+
+
+def test_tts_choice(tmp_path):
+    s = make(tmp_path)
+    assert s.get_tts_choice("global") is None
+    s.set_tts_choice("global", "idx")
+    s.set_tts_choice("group:1", "edge")
+    assert (s.get_tts_choice("global"), s.get_tts_choice("group:1")) == ("idx", "edge")
+    s.set_tts_choice("group:1", None)
+    assert s.get_tts_choice("group:1") is None

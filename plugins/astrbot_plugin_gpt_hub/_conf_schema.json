@@ -20,5 +20,7 @@
   "research_timeout": {"description": "深度研究超时（秒）", "type": "int", "default": 1800},
   "research_concurrency": {"description": "深度研究并发数", "type": "int", "default": 1},
   "research_summary_chars": {"description": "研究完成消息中的摘要字数", "type": "int", "default": 600},
-  "tts_max_chars": {"description": "语音合成文本上限（字）", "type": "int", "default": 300}
+  "tts_max_chars": {"description": "语音合成文本上限（字）", "type": "int", "default": 300},
+  "tts_presets": {"description": "语音预设（JSON 列表）", "type": "text", "default": "", "hint": "type=openai_speech（OpenAI 兼容 /audio/speech，如硅基流动 IndexTTS-2/CosyVoice2）或 astrbot（引用 AstrBot 已配置的 TTS provider）。例：[{\"name\": \"index-alex\", \"type\": \"openai_speech\", \"base_url\": \"https://api.siliconflow.cn/v1\", \"api_key\": \"sk-...\", \"model\": \"IndexTeam/IndexTTS-2\", \"voice\": \"IndexTeam/IndexTTS-2:alex\"}, {\"name\": \"晓晓\", \"type\": \"astrbot\", \"provider_id\": \"edge_tts\"}]。QQ 里用 /tts use 切换"},
+  "tts_default_preset": {"description": "默认语音预设名", "type": "string", "default": "", "hint": "留空=AstrBot 当前 TTS provider；可被 /tts global、/tts use 覆盖"}
 }

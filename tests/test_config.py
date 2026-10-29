@@ -80,3 +80,40 @@ def test_int_from_string():
 def test_bad_timezone():
     with pytest.raises(ConfigError):
         parse_config({"timezone": "Mars/Base"})
+
+
+def test_tts_presets_parse():
+    from core.config import TtsPreset
+
+    cfg = parse_config(
+        {
+            "tts_presets": '[{"name": "idx", "type": "openai_speech", "base_url": "https://x/v1",'
+            ' "api_key": "k", "model": "IndexTeam/IndexTTS-2", "voice": "v", "speed": "1.2",'
+            ' "extra": {"gain": 2}}, {"name": "edge", "type": "astrbot", "provider_id": "edge_tts"}]',
+            "tts_default_preset": "edge",
+        }
+    )
+    assert cfg.tts_presets == (
+        TtsPreset(name="idx", type="openai_speech", base_url="https://x/v1", api_key="k",
+                  model="IndexTeam/IndexTTS-2", voice="v", speed=1.2, extra={"gain": 2}),
+        TtsPreset(name="edge", type="astrbot", provider_id="edge_tts"),
+    )
+    assert cfg.tts_default_preset == "edge"
+    assert parse_config({}).tts_presets == ()
+
+
+@pytest.mark.parametrize(
+    "presets,default",
+    [
+        ([{"type": "astrbot", "provider_id": "x"}], ""),
+        ([{"name": "a", "type": "nope"}], ""),
+        ([{"name": "a", "type": "astrbot"}], ""),
+        ([{"name": "a", "type": "openai_speech", "base_url": "u"}], ""),
+        ([{"name": "a", "type": "astrbot", "provider_id": "x"}] * 2, ""),
+        ([{"name": "a", "type": "astrbot", "provider_id": "x"}], "missing"),
+        ([{"name": "a", "type": "openai_speech", "base_url": "u", "model": "m", "speed": "x"}], ""),
+    ],
+)
+def test_tts_presets_invalid(presets, default):
+    with pytest.raises(ConfigError):
+        parse_config({"tts_presets": presets, "tts_default_preset": default})

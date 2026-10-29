@@ -25,6 +25,10 @@ CREATE TABLE IF NOT EXISTS counter (
 CREATE TABLE IF NOT EXISTS voice_session (
     umo TEXT PRIMARY KEY
 );
+CREATE TABLE IF NOT EXISTS tts_choice (
+    scope TEXT PRIMARY KEY,
+    preset TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS research_job (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     umo TEXT NOT NULL,
@@ -136,6 +140,18 @@ class Store:
 
     def is_voice(self, umo: str) -> bool:
         return bool(self._query("SELECT 1 FROM voice_session WHERE umo = ?", (umo,)))
+
+    # 语音预设选择（scope：global 或 group:<群号>）
+
+    def get_tts_choice(self, scope: str) -> str | None:
+        rows = self._query("SELECT preset FROM tts_choice WHERE scope = ?", (scope,))
+        return rows[0][0] if rows else None
+
+    def set_tts_choice(self, scope: str, preset: str | None) -> None:
+        if preset is None:
+            self._write("DELETE FROM tts_choice WHERE scope = ?", (scope,))
+        else:
+            self._write("INSERT OR REPLACE INTO tts_choice (scope, preset) VALUES (?, ?)", (scope, preset))
 
     # 研究任务
 

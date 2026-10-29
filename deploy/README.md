@@ -53,7 +53,11 @@ docker exec -it astrbot codex login status
 - `effort_providers`：`{"low": "codex_low", "medium": "codex_medium", "high": "codex_high"}`
 - `draw_backends`：例如
   `[{"name": "订阅", "type": "codex_cli"}, {"name": "sf", "type": "openai_images", "base_url": "https://api.siliconflow.cn/v1", "api_key": "sk-...", "model": "<生图模型>"}]`
-- TTS：在 AstrBot WebUI 启用任意 TTS provider（Edge TTS 免费），`/say`、`/voice` 直接复用
+- TTS：在 AstrBot WebUI 启用一个 TTS provider（如免费的 Edge TTS）作为默认和回落
+- 语音预设 `tts_presets`（可选，在线 API，不需要 GPU）：
+  - 硅基流动（国内直连，OpenAI 兼容）：`IndexTeam/IndexTTS-2`、`FunAudioLLM/CosyVoice2-0.5B`；预设音色写成 `<模型>:<音色>`，如 `FunAudioLLM/CosyVoice2-0.5B:anna`；自定义音色（实名认证后）用 `POST /v1/uploads/audio/voice` 上传 8–10 秒参考音频，返回的 `speech:...` uri 填进 voice
+  - 也可以用 `type=astrbot` 引用 WebUI 里配置的 MiniMax、火山、阿里百炼、FishAudio 等 provider
+  - QQ 命令（仅 owner）：`/tts` 查看，`/tts use <预设> [-g 群号]` 设本群，`/tts global <预设>` 设全局
 
 改完配置后重载插件。
 
