@@ -64,8 +64,8 @@ docker exec -it astrbot codex login status
 ### 角色扮演（owner 私聊执行，`-g <群号>` 指定群）
 
 - `/role gen <名称> <描述>`：AI 扩写角色卡；`/role set <名称> <人设>`：手写人设
-- `/role greet|secret|voice <名称> <内容>`：设置开场白、隐藏设定（`secret … gen` 让 AI 重新生成）、绑定语音
-- `/role use <名称|none|default> [-g 群号]`：切换角色，会开新对话并发开场白；`/role global <名称|none>`：设全局默认
+- `/role secret|voice <名称> <内容>`：设置隐藏设定（`secret … gen` 让 AI 重新生成）、绑定语音
+- `/role use <名称|none|default> [-g 群号]`：切换角色，会静默开新对话（不在群里发言）；`/role global <名称|none>`：设全局默认
 - `/role`、`/role show <名称>`、`/role del <名称>`
 - 建议在 AstrBot 配置中打开 `provider_settings.identifier`，让模型知道每条消息是谁发的
 

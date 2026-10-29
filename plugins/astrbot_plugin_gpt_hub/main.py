@@ -170,10 +170,7 @@ class GptHub(Star):
             kind, target = act.switch_scope.split(":", 1)
             umo = f"{pid}:{'GroupMessage' if kind == 'group' else 'FriendMessage'}:{target}"
             try:
-                history = [{"role": "assistant", "content": act.greeting}] if act.greeting else None
-                await self.context.conversation_manager.new_conversation(umo, pid, content=history)
-                if act.greeting:
-                    await self.context.send_message(umo, MessageChain().message(act.greeting))
+                await self.context.conversation_manager.new_conversation(umo, pid)
             except Exception as e:  # noqa: BLE001
                 logger.exception("gpt_hub 切换角色开新对话失败 umo=%s", umo)
                 yield event.plain_result(f"{act.text}\n（开新对话失败：{_short(e)}）")

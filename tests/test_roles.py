@@ -17,7 +17,7 @@ class FakeGen:
         return self.reply
 
 
-CARD = {"prompt": "你是海龟汤主持人", "examples": "玩家：是人吗？\n主持：是。", "greeting": "来喝汤吧", "secret": "汤面…汤底…"}
+CARD = {"prompt": "你是海龟汤主持人", "examples": "玩家：是人吗？\n主持：是。", "secret": "汤面…汤底…"}
 
 
 @pytest.fixture
@@ -72,20 +72,19 @@ async def test_status_and_list(env):
 
 async def test_set_keeps_newlines_and_other_fields(env):
     svc, store, _ = env()
-    store.save_role(Role("a", "旧", greeting="嗨"))
+    store.save_role(Role("a", "旧", secret="秘"))
     act = await run(svc, "set a 第一行\n第二行")
     assert act.text.startswith("已保存角色 a")
-    assert store.get_role("a") == Role("a", "第一行\n第二行", greeting="嗨")
+    assert store.get_role("a") == Role("a", "第一行\n第二行", secret="秘")
 
 
-async def test_greet_secret_voice(env):
+async def test_secret_voice(env):
     svc, store, _ = env()
-    assert (await run(svc, "greet nope 嗨")).text == "角色不存在：nope"
+    assert (await run(svc, "secret nope X")).text == "角色不存在：nope"
     store.save_role(Role("a", "A"))
-    await run(svc, "greet a 大家好")
     await run(svc, "secret a 汤底是X")
     await run(svc, "voice a 晓晓")
-    assert store.get_role("a") == Role("a", "A", greeting="大家好", secret="汤底是X", tts_preset="晓晓")
+    assert store.get_role("a") == Role("a", "A", secret="汤底是X", tts_preset="晓晓")
     await run(svc, "voice a none")
     assert store.get_role("a").tts_preset == ""
 
@@ -93,9 +92,9 @@ async def test_greet_secret_voice(env):
 async def test_gen(env):
     svc, store, gen = env()
     act = await run(svc, "gen 海龟汤 海龟汤主持人，题目要烧脑", group=None)
-    assert store.get_role("海龟汤") == Role("海龟汤", CARD["prompt"], CARD["greeting"], CARD["examples"], CARD["secret"])
+    assert store.get_role("海龟汤") == Role("海龟汤", CARD["prompt"], "", CARD["examples"], CARD["secret"])
     system, prompt = gen.calls[0]
-    assert "JSON" in system and "成年" in system
+    assert "JSON" in system and "成年" in system and "开场白" not in system
     assert "海龟汤主持人，题目要烧脑" in prompt
     assert act.text.startswith("已生成角色 海龟汤") and CARD["secret"] in act.text  # 私聊显示隐藏设定
 
@@ -135,16 +134,16 @@ async def test_show(env):
 
 async def test_use(env):
     svc, store, _ = env()
-    store.save_role(Role("a", "A", greeting="大家好"))
+    store.save_role(Role("a", "A", greeting="旧开场白"))
     act = await run(svc, "use a")
-    assert (act.switch_scope, act.greeting) == ("group:100", "大家好")
+    assert act.switch_scope == "group:100" and not hasattr(act, "greeting")
     assert store.get_role_choice("group:100") == "a"
     act = await run(svc, "use a -g 200", group=None)
     assert act.switch_scope == "group:200" and store.get_role_choice("group:200") == "a"
     act = await run(svc, "use a", group=None, sender="8")
     assert act.switch_scope == "private:8"
     act = await run(svc, "use none")
-    assert store.get_role_choice("group:100") == "" and act.switch_scope == "group:100" and act.greeting == ""
+    assert store.get_role_choice("group:100") == "" and act.switch_scope == "group:100"
     await run(svc, "use default")
     assert store.get_role_choice("group:100") is None
     bad = await run(svc, "use nope")
@@ -164,7 +163,7 @@ async def test_global_and_del(env):
     assert (await run(svc, "del a")).text == "角色不存在：a"
 
 
-@pytest.mark.parametrize("text", ["fly", "set a", "gen a", "use", "greet a", "voice a", "-g"])
+@pytest.mark.parametrize("text", ["fly", "set a", "gen a", "use", "greet a 嗨", "voice a", "-g"])
 async def test_usage(env, text):
     svc, _, _ = env()
     assert (await run(svc, text)).text == ROLE_USAGE

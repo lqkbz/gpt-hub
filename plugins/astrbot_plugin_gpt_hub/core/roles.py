@@ -13,7 +13,6 @@ ROLE_USAGE = (
     "/role  查看当前角色与列表\n"
     "/role gen <名称> <简短描述>  AI 扩写角色卡\n"
     "/role set <名称> <完整人设>\n"
-    "/role greet <名称> <开场白>\n"
     "/role secret <名称> <文本|gen>  隐藏设定（如海龟汤汤底）\n"
     "/role voice <名称> <语音预设|none>\n"
     "/role show <名称>\n"
@@ -27,9 +26,8 @@ GEN_SYSTEM = """你是角色设计师，为 QQ 群聊机器人设计角色扮演
 - 角色一律是成年人（18 岁以上）；可以俏皮、暧昧、调情、毒舌，但不写露骨色情内容。
 - 人设写清：身份背景、性格、说话风格与口头禅、对群友的态度、行为规则；第二人称（“你是……”）。
 - 示例对话 2-4 组，体现语气，格式“群友：…\\n角色：…”。
-- 开场白：角色进群时说的第一句话，简短。
 - 隐藏设定：只有角色知道、不能直接说出的内容（如游戏谜底、角色秘密）；没有则留空。游戏主持类角色必须在这里给出第一局的完整题目与答案。
-只输出一个 JSON 对象，键为 prompt、examples、greeting、secret，值均为字符串，不要输出其他内容。"""
+只输出一个 JSON 对象，键为 prompt、examples、secret，值均为字符串，不要输出其他内容。"""
 
 SECRET_SYSTEM = """你为角色扮演卡重新生成“隐藏设定”（只有角色知道、不能直接说出的内容，如游戏的新题目与答案）。
 与旧设定不同，风格符合角色。只输出新的隐藏设定正文，不要其他内容。"""
@@ -42,7 +40,6 @@ Generate = Callable[[str, str], Awaitable[str]]
 class RoleAction:
     text: str
     switch_scope: str | None = None  # 需要开新对话的会话范围：group:<群号> / private:<QQ号>
-    greeting: str = ""
 
 
 def build_role_block(r: Role) -> str:
@@ -73,7 +70,7 @@ def _parse_card(reply: str) -> dict:
     data = json.loads(reply[start : end + 1])
     if not isinstance(data, dict) or not str(data.get("prompt", "")).strip():
         raise ValueError("角色卡缺少人设")
-    return {k: str(data.get(k, "") or "").strip() for k in ("prompt", "examples", "greeting", "secret")}
+    return {k: str(data.get(k, "") or "").strip() for k in ("prompt", "examples", "secret")}
 
 
 class RoleService:
@@ -109,8 +106,6 @@ class RoleService:
     @staticmethod
     def _render(r: Role, show_secret: bool) -> str:
         lines = [f"【人设】\n{r.prompt}"]
-        if r.greeting:
-            lines.append(f"【开场白】{r.greeting}")
         if r.examples:
             lines.append(f"【示例对话】\n{r.examples}")
         if r.tts_preset:
@@ -163,17 +158,15 @@ class RoleService:
             return await self._gen(name, rest, private)
         if sub == "set":
             old = self.store.get_role(name)
-            role = Role(name, rest) if old is None else Role(name, rest, old.greeting, old.examples, old.secret, old.tts_preset)
+            role = Role(name, rest) if old is None else Role(name, rest, "", old.examples, old.secret, old.tts_preset)
             self.store.save_role(role)
             return RoleAction(f"已保存角色 {name}")
-        if sub not in ("greet", "secret", "voice"):
+        if sub not in ("secret", "voice"):
             return RoleAction(ROLE_USAGE)
         role = self.store.get_role(name)
         if role is None:
             return RoleAction(f"角色不存在：{name}")
-        if sub == "greet":
-            role.greeting = rest
-        elif sub == "voice":
+        if sub == "voice":
             role.tts_preset = "" if rest == "none" else rest
         elif rest == "gen":
             try:
@@ -196,8 +189,7 @@ class RoleService:
         except Exception as e:  # noqa: BLE001
             return RoleAction(f"生成失败：{str(e)[:200]}")
         old = self.store.get_role(name)
-        role = Role(name, card["prompt"], card["greeting"], card["examples"], card["secret"],
-                    old.tts_preset if old else "")  # fmt: skip
+        role = Role(name, card["prompt"], "", card["examples"], card["secret"], old.tts_preset if old else "")
         self.store.save_role(role)
         return RoleAction(
             f"已生成角色 {name}\n{self._render(role, private)}\n\n用 /role use {name} 应用到群，/role set 修改人设"
@@ -220,4 +212,4 @@ class RoleService:
         if role is None:
             return RoleAction(f"角色不存在：{name}")
         self.store.set_role_choice(scope, name)
-        return RoleAction(f"已为 {scope} 切换角色：{name}，已开新对话", switch_scope=scope, greeting=role.greeting)
+        return RoleAction(f"已为 {scope} 切换角色：{name}，已开新对话", switch_scope=scope)
