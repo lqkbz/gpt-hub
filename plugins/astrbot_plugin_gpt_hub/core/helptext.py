@@ -30,6 +30,8 @@ _ADMIN = [
     "/role set <名称> <人设>  手写人设",
     "/role secret <名称> <文本|gen>  隐藏设定（gen 让 AI 重新生成）",
     "/role voice <名称> <预设|none>  绑定语音",
+    "/role model <名称> <provider|none>  绑定模型（仅私聊生效）",
+    "/role nsfw <名称> on|off  成人角色（仅私聊）",
     "/role show <名称>  查看角色卡",
     "/role use <名称|none|default> [-g 群号]  切换角色（自动开新对话）",
     "/role global <名称|none>  全局默认角色",

@@ -106,3 +106,28 @@ def test_role_choice(tmp_path):
     assert s.get_role_choice("group:2") == ""
     s.set_role_choice("group:2", None)
     assert s.get_role_choice("group:2") is None
+
+
+def test_role_provider_nsfw_fields(tmp_path):
+    from core.store import Role
+
+    s = make(tmp_path)
+    s.save_role(Role("a", "A", provider="nano_rp", nsfw=True))
+    r = s.get_role("a")
+    assert (r.provider, r.nsfw) == ("nano_rp", True)
+    assert s.get_role("a") == Role("a", "A", provider="nano_rp", nsfw=True)
+
+
+def test_role_table_migration(tmp_path):
+    import sqlite3
+
+    path = tmp_path / "old.db"
+    db = sqlite3.connect(path)
+    db.execute("CREATE TABLE role (name TEXT PRIMARY KEY, prompt TEXT NOT NULL, greeting TEXT NOT NULL DEFAULT '',"
+               " examples TEXT NOT NULL DEFAULT '', secret TEXT NOT NULL DEFAULT '', tts_preset TEXT NOT NULL DEFAULT '')")
+    db.execute("INSERT INTO role (name, prompt) VALUES ('old', 'P')")
+    db.commit()
+    db.close()
+    s = Store(path)
+    r = s.get_role("old")
+    assert (r.prompt, r.provider, r.nsfw) == ("P", "", False)

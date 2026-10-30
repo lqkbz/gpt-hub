@@ -74,9 +74,19 @@ class Role:
     examples: str = ""
     secret: str = ""
     tts_preset: str = ""
+    provider: str = ""  # 绑定的 AstrBot provider id，仅私聊生效
+    nsfw: bool = False  # 成人角色：仅限私聊，私聊时允许露骨内容
+
+    def __post_init__(self) -> None:
+        self.nsfw = bool(self.nsfw)
 
 
-_ROLE_COLS = "name, prompt, greeting, examples, secret, tts_preset"
+_ROLE_COLS = "name, prompt, greeting, examples, secret, tts_preset, provider, nsfw"
+# 旧库升级：缺失的列及其定义
+_ROLE_MIGRATIONS = {
+    "provider": "TEXT NOT NULL DEFAULT ''",
+    "nsfw": "INTEGER NOT NULL DEFAULT 0",
+}
 
 
 @dataclass
@@ -102,6 +112,10 @@ class Store:
         self._lock = threading.Lock()
         with self._lock:
             self._db.executescript(_SCHEMA)
+            cols = {row[1] for row in self._db.execute("PRAGMA table_info(role)")}
+            for col, ddl in _ROLE_MIGRATIONS.items():
+                if col not in cols:
+                    self._db.execute(f"ALTER TABLE role ADD COLUMN {col} {ddl}")
             self._db.commit()
 
     def close(self) -> None:
@@ -182,8 +196,8 @@ class Store:
 
     def save_role(self, r: Role) -> None:
         self._write(
-            f"INSERT OR REPLACE INTO role ({_ROLE_COLS}) VALUES (?, ?, ?, ?, ?, ?)",
-            (r.name, r.prompt, r.greeting, r.examples, r.secret, r.tts_preset),
+            f"INSERT OR REPLACE INTO role ({_ROLE_COLS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (r.name, r.prompt, r.greeting, r.examples, r.secret, r.tts_preset, r.provider, int(r.nsfw)),
         )
 
     def get_role(self, name: str) -> Role | None:

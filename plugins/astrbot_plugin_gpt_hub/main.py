@@ -116,10 +116,16 @@ class GptHub(Star):
     async def route_chat(self, event: AstrMessageEvent) -> None:
         if self.config_error:
             return
-        route = self.policy.route_chat(_msg_ctx(event))
+        ctx = _msg_ctx(event)
+        route = self.policy.route_chat(ctx)
         if not route.allowed:
             logger.info("gpt_hub 拦截聊天 sender=%s reason=%s", event.get_sender_id(), route.reason)
             event.stop_event()
+            return
+        role = self.roles.resolve(ctx.group_id, ctx.sender_id) if ctx.group_id is None else None
+        if role is not None and role.provider:
+            # 私聊角色绑定的模型（如无审查模型）：用该 provider 自己的默认模型
+            event.set_extra("selected_provider", role.provider)
             return
         if route.provider_id:
             event.set_extra("selected_provider", route.provider_id)
@@ -138,7 +144,8 @@ class GptHub(Star):
         role = self.roles.resolve(ctx.group_id, ctx.sender_id)
         if role is not None:
             # 放在最前面并声明最高优先级，覆盖 AstrBot 人格
-            req.system_prompt = build_role_block(role) + "\n\n" + (req.system_prompt or "")
+            explicit_ok = role.nsfw and ctx.group_id is None
+            req.system_prompt = build_role_block(role, explicit_ok) + "\n\n" + (req.system_prompt or "")
 
     # 角色扮演
 
@@ -170,7 +177,11 @@ class GptHub(Star):
             kind, target = act.switch_scope.split(":", 1)
             umo = f"{pid}:{'GroupMessage' if kind == 'group' else 'FriendMessage'}:{target}"
             try:
-                await self.context.conversation_manager.new_conversation(umo, pid)
+                # 私聊剧情卡：开场白写入新对话并发出；群里 act.greeting 恒为空
+                history = [{"role": "assistant", "content": act.greeting}] if act.greeting else None
+                await self.context.conversation_manager.new_conversation(umo, pid, content=history)
+                if act.greeting:
+                    await self.context.send_message(umo, MessageChain().message(act.greeting))
             except Exception as e:  # noqa: BLE001
                 logger.exception("gpt_hub 切换角色开新对话失败 umo=%s", umo)
                 yield event.plain_result(f"{act.text}\n（开新对话失败：{_short(e)}）")

@@ -136,7 +136,7 @@ async def test_use(env):
     svc, store, _ = env()
     store.save_role(Role("a", "A", greeting="旧开场白"))
     act = await run(svc, "use a")
-    assert act.switch_scope == "group:100" and not hasattr(act, "greeting")
+    assert act.switch_scope == "group:100" and act.greeting == ""
     assert store.get_role_choice("group:100") == "a"
     act = await run(svc, "use a -g 200", group=None)
     assert act.switch_scope == "group:200" and store.get_role_choice("group:200") == "a"
@@ -167,3 +167,55 @@ async def test_global_and_del(env):
 async def test_usage(env, text):
     svc, _, _ = env()
     assert (await run(svc, text)).text == ROLE_USAGE
+
+
+def test_block_explicit_only_when_allowed():
+    r = Role("x", "p", nsfw=True)
+    normal = build_role_block(r)
+    assert "不输出露骨色情内容" in normal
+    explicit = build_role_block(r, explicit_ok=True)
+    assert "不输出露骨色情内容" not in explicit and "成年" in explicit
+
+
+async def test_model_and_nsfw_commands(env):
+    svc, store, _ = env()
+    store.save_role(Role("a", "A"))
+    assert (await run(svc, "model a nano_rp")).text.startswith("已更新角色 a")
+    assert store.get_role("a").provider == "nano_rp"
+    await run(svc, "model a none")
+    assert store.get_role("a").provider == ""
+    await run(svc, "nsfw a on")
+    assert store.get_role("a").nsfw is True
+    await run(svc, "nsfw a off")
+    assert store.get_role("a").nsfw is False
+    assert (await run(svc, "nsfw a maybe")).text == ROLE_USAGE
+
+
+async def test_nsfw_role_blocked_in_group(env):
+    svc, store, _ = env()
+    store.save_role(Role("r18", "P", greeting="开场", nsfw=True))
+    act = await run(svc, "use r18")
+    assert act.switch_scope is None and "仅限私聊" in act.text
+    act = await run(svc, "use r18 -g 200", group=None)
+    assert act.switch_scope is None and "仅限私聊" in act.text
+    assert store.get_role_choice("group:100") is None and store.get_role_choice("group:200") is None
+    assert "仅限私聊" in (await run(svc, "global r18")).text
+    store.set_role_choice("global", "r18")
+    assert svc.resolve("100", "1") is None  # 即使被设成全局，群里也不生效
+
+
+async def test_private_use_returns_greeting(env):
+    svc, store, _ = env()
+    store.save_role(Role("r18", "P", greeting="开场白", nsfw=True))
+    act = await run(svc, "use r18", group=None, sender="8")
+    assert (act.switch_scope, act.greeting) == ("private:8", "开场白")
+    store.save_role(Role("g", "P", greeting="群开场"))
+    act = await run(svc, "use g")
+    assert act.switch_scope == "group:100" and act.greeting == ""
+
+
+async def test_status_shows_flags(env):
+    svc, store, _ = env()
+    store.save_role(Role("r18", "P", nsfw=True, provider="nano_rp"))
+    out = (await run(svc, "", group=None)).text
+    assert "- r18（成人·私聊｜模型：nano_rp）" in out
