@@ -126,3 +126,12 @@ def test_parse_voice_args(args, expected):
     from core.commands import parse_voice_args
 
     assert parse_voice_args(args) == expected
+
+
+def test_mode_nsfw(env):
+    run, store = env
+    out = run("nsfw on")
+    assert store.get_policy("100").nsfw is True and "成人内容：开" in out
+    run("nsfw off -g 100")
+    assert store.get_policy("100").nsfw is False
+    assert "成人内容：关" in run("")

@@ -122,9 +122,10 @@ class GptHub(Star):
             logger.info("gpt_hub 拦截聊天 sender=%s reason=%s", event.get_sender_id(), route.reason)
             event.stop_event()
             return
-        role = self.roles.resolve(ctx.group_id, ctx.sender_id) if ctx.group_id is None else None
-        if role is not None and role.provider:
-            # 私聊角色绑定的模型（如无审查模型）：用该 provider 自己的默认模型
+        role = self.roles.resolve(ctx.group_id, ctx.sender_id)
+        binding_ok = ctx.group_id is None or (role is not None and role.nsfw)  # 成人角色能解析到即在白名单群
+        if role is not None and role.provider and binding_ok:
+            # 角色绑定的模型（如无审查模型）：用该 provider 自己的默认模型
             event.set_extra("selected_provider", role.provider)
             return
         if route.provider_id:
@@ -144,7 +145,7 @@ class GptHub(Star):
         role = self.roles.resolve(ctx.group_id, ctx.sender_id)
         if role is not None:
             # 放在最前面并声明最高优先级，覆盖 AstrBot 人格
-            explicit_ok = role.nsfw and ctx.group_id is None
+            explicit_ok = role.nsfw and self.roles.allows_explicit(ctx.group_id)
             req.system_prompt = build_role_block(role, explicit_ok) + "\n\n" + (req.system_prompt or "")
 
     # 角色扮演

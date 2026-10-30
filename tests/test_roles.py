@@ -219,3 +219,20 @@ async def test_status_shows_flags(env):
     store.save_role(Role("r18", "P", nsfw=True, provider="nano_rp"))
     out = (await run(svc, "", group=None)).text
     assert "- r18（成人·私聊｜模型：nano_rp）" in out
+
+
+async def test_nsfw_role_allowed_in_whitelisted_group(env):
+    from core.store import GroupPolicy
+
+    svc, store, _ = env()
+    store.save_role(Role("r18", "P", greeting="开场", nsfw=True))
+    store.save_policy(GroupPolicy("100", nsfw=True))
+    act = await run(svc, "use r18")
+    assert act.switch_scope == "group:100" and act.greeting == ""
+    assert svc.resolve("100", "1").name == "r18"
+    assert svc.allows_explicit("100") is True
+    assert svc.allows_explicit(None) is True
+    assert svc.allows_explicit("200") is False
+    store.save_policy(GroupPolicy("100", nsfw=False))
+    assert svc.resolve("100", "1") is None
+    assert "仅限私聊" in (await run(svc, "use r18 -g 200", group=None)).text

@@ -13,7 +13,8 @@ MODE_USAGE = (
     "/mode off <功能>\n"
     "/mode model <模型名|default>\n"
     "/mode effort <强度|default>\n"
-    "/mode chat <on|off>"
+    "/mode chat <on|off>\n"
+    "/mode nsfw <on|off>  成人内容白名单（仅在确认全员成年时开启）"
 )
 
 
@@ -31,6 +32,7 @@ def render_policy(p: GroupPolicy, policy: Policy) -> str:
     return (
         f"群 {p.group_id}\n"
         f"聊天：{'开' if p.chat_enabled else '关'}\n"
+        f"成人内容：{'开' if p.nsfw else '关'}\n"
         f"模型：{model_text}\n"
         f"推理强度：{effort_text} → {provider}\n"
         f"功能：{feats}"
@@ -71,6 +73,8 @@ def _apply(p: GroupPolicy, args: list[str], policy: Policy) -> str | None:
             return f"不支持的推理强度：{rest[0]}；可选：{choices}"
     elif sub == "chat" and len(rest) == 1 and rest[0] in ("on", "off"):
         p.chat_enabled = rest[0] == "on"
+    elif sub == "nsfw" and len(rest) == 1 and rest[0] in ("on", "off"):
+        p.nsfw = rest[0] == "on"
     else:
         return MODE_USAGE
     return None

@@ -64,6 +64,7 @@ class GroupPolicy:
     effort: str | None = None
     features: dict[str, int] = field(default_factory=dict)
     chat_enabled: bool = True
+    nsfw: bool = False  # 成人内容白名单：允许成人角色与露骨内容（owner 确认全员成年后开启）
 
 
 @dataclass
@@ -74,18 +75,18 @@ class Role:
     examples: str = ""
     secret: str = ""
     tts_preset: str = ""
-    provider: str = ""  # 绑定的 AstrBot provider id，仅私聊生效
-    nsfw: bool = False  # 成人角色：仅限私聊，私聊时允许露骨内容
+    provider: str = ""  # 绑定的 AstrBot provider id：私聊生效；成人角色另在白名单群生效
+    nsfw: bool = False  # 成人角色：限私聊和成人白名单群，在其中允许露骨内容
 
     def __post_init__(self) -> None:
         self.nsfw = bool(self.nsfw)
 
 
 _ROLE_COLS = "name, prompt, greeting, examples, secret, tts_preset, provider, nsfw"
-# 旧库升级：缺失的列及其定义
-_ROLE_MIGRATIONS = {
-    "provider": "TEXT NOT NULL DEFAULT ''",
-    "nsfw": "INTEGER NOT NULL DEFAULT 0",
+# 旧库升级：表 → 缺失的列及其定义
+_MIGRATIONS = {
+    "role": {"provider": "TEXT NOT NULL DEFAULT ''", "nsfw": "INTEGER NOT NULL DEFAULT 0"},
+    "group_policy": {"nsfw": "INTEGER NOT NULL DEFAULT 0"},
 }
 
 
@@ -112,10 +113,11 @@ class Store:
         self._lock = threading.Lock()
         with self._lock:
             self._db.executescript(_SCHEMA)
-            cols = {row[1] for row in self._db.execute("PRAGMA table_info(role)")}
-            for col, ddl in _ROLE_MIGRATIONS.items():
-                if col not in cols:
-                    self._db.execute(f"ALTER TABLE role ADD COLUMN {col} {ddl}")
+            for table, columns in _MIGRATIONS.items():
+                cols = {row[1] for row in self._db.execute(f"PRAGMA table_info({table})")}
+                for col, ddl in columns.items():
+                    if col not in cols:
+                        self._db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
             self._db.commit()
 
     def close(self) -> None:
@@ -136,19 +138,19 @@ class Store:
 
     def get_policy(self, group_id: str) -> GroupPolicy:
         rows = self._query(
-            "SELECT model, effort, features, chat_enabled FROM group_policy WHERE group_id = ?",
+            "SELECT model, effort, features, chat_enabled, nsfw FROM group_policy WHERE group_id = ?",
             (group_id,),
         )
         if not rows:
             return GroupPolicy(group_id=group_id)
-        model, effort, features, chat_enabled = rows[0]
-        return GroupPolicy(group_id, model, effort, json.loads(features), bool(chat_enabled))
+        model, effort, features, chat_enabled, nsfw = rows[0]
+        return GroupPolicy(group_id, model, effort, json.loads(features), bool(chat_enabled), bool(nsfw))
 
     def save_policy(self, p: GroupPolicy) -> None:
         self._write(
-            "INSERT OR REPLACE INTO group_policy (group_id, model, effort, features, chat_enabled)"
-            " VALUES (?, ?, ?, ?, ?)",
-            (p.group_id, p.model, p.effort, json.dumps(p.features), int(p.chat_enabled)),
+            "INSERT OR REPLACE INTO group_policy (group_id, model, effort, features, chat_enabled, nsfw)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (p.group_id, p.model, p.effort, json.dumps(p.features), int(p.chat_enabled), int(p.nsfw)),
         )
 
     # 计数

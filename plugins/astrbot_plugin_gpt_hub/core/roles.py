@@ -45,7 +45,7 @@ class RoleAction:
     greeting: str = ""  # 仅私聊切换时：发送并写入新对话的开场白
 
 
-NSFW_PRIVATE_ONLY = "该角色是成人角色，仅限私聊使用"
+NSFW_PRIVATE_ONLY = "该角色是成人角色，仅限私聊使用（或先用 /mode nsfw on 给全员成年的群开白名单）"
 
 
 def build_role_block(r: Role, explicit_ok: bool = False) -> str:
@@ -105,9 +105,13 @@ class RoleService:
             source = "全局默认" if hit else "无"
         else:
             source = "群设置"
-        if role is not None and role.nsfw:  # 成人角色在群里一律不生效
-            return None, source
+        if role is not None and role.nsfw and not self.allows_explicit(group_id):
+            return None, source  # 成人角色只在白名单群生效
         return role, source
+
+    def allows_explicit(self, group_id: str | None) -> bool:
+        """私聊，或 owner 开了成人内容白名单的群。"""
+        return group_id is None or self.store.get_policy(group_id).nsfw
 
     def resolve(self, group_id: str | None, sender_id: str) -> Role | None:
         return self.resolve_with_source(group_id, sender_id)[0]
@@ -247,7 +251,7 @@ class RoleService:
         role = self.store.get_role(name)
         if role is None:
             return RoleAction(f"角色不存在：{name}")
-        if role.nsfw and group is not None:
+        if role.nsfw and not self.allows_explicit(group):
             return RoleAction(NSFW_PRIVATE_ONLY)
         self.store.set_role_choice(scope, name)
         greeting = role.greeting if group is None else ""  # 群里不发开场白

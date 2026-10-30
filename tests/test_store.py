@@ -131,3 +131,21 @@ def test_role_table_migration(tmp_path):
     s = Store(path)
     r = s.get_role("old")
     assert (r.prompt, r.provider, r.nsfw) == ("P", "", False)
+
+
+def test_group_policy_nsfw_and_migration(tmp_path):
+    import sqlite3
+
+    s = make(tmp_path)
+    s.save_policy(GroupPolicy("1", nsfw=True))
+    assert s.get_policy("1").nsfw is True
+    assert s.get_policy("2").nsfw is False
+
+    path = tmp_path / "old.db"
+    db = sqlite3.connect(path)
+    db.execute("CREATE TABLE group_policy (group_id TEXT PRIMARY KEY, model TEXT, effort TEXT,"
+               " features TEXT NOT NULL DEFAULT '{}', chat_enabled INTEGER NOT NULL DEFAULT 1)")
+    db.execute("INSERT INTO group_policy (group_id) VALUES ('9')")
+    db.commit()
+    db.close()
+    assert Store(path).get_policy("9").nsfw is False
